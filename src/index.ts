@@ -34,7 +34,7 @@ function runExtendScript(scriptPath: string, args: Record<string, any> = {}): st
 
     // Find After Effects executable location - modify as needed for your installation
     // This is a common default location, adjust as necessary
-    const aePath = "C:\\Program Files\\Adobe\\Adobe After Effects 2024\\Support Files\\AfterFX.exe";
+    const aePath = "C:\\Program Files\\Adobe\\Adobe After Effects 2025\\Support Files\\AfterFX.exe";
     
     // Verify After Effects executable exists
     if (!fs.existsSync(aePath)) {
