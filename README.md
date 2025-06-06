@@ -60,7 +60,7 @@
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/after-effects-mcp.git
+   git clone https://github.com/Dakkshin/after-effects-mcp.git
    cd after-effects-mcp
    ```
 
