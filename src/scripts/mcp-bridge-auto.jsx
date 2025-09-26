@@ -342,6 +342,7 @@ function setLayerProperties(args) {
 
 /**
  * Sets a keyframe for a specific property on a layer.
+ * Indices are 1-based for After Effects collections.
  * @param {number} compIndex - The index of the composition (1-based).
  * @param {number} layerIndex - The index of the layer within the composition (1-based).
  * @param {string} propertyName - The name of the property (e.g., "Position", "Scale", "Rotation", "Opacity").
@@ -351,7 +352,7 @@ function setLayerProperties(args) {
  */
 function setLayerKeyframe(compIndex, layerIndex, propertyName, timeInSeconds, value) {
     try {
-        // Adjust indices to be 0-based for ExtendScript arrays
+        // Use 1-based indices as per After Effects API
         var comp = app.project.items[compIndex];
         if (!comp || !(comp instanceof CompItem)) {
             return JSON.stringify({ success: false, message: "Composition not found at index " + compIndex });
@@ -623,7 +624,7 @@ function applyEffectTemplate(args) {
                 }
             },
             "directional-blur": {
-                effectMatchName: "ADBE Motion Blur",
+                effectMatchName: "ADBE Directional Blur",
                 settings: {
                     "Direction": customSettings.direction || 0,
                     "Blur Length": customSettings.length || 10
@@ -676,22 +677,14 @@ function applyEffectTemplate(args) {
             "cinematic-look": {
                 effects: [
                     {
-                        effectMatchName: "ADBE Curves",
-                        settings: {} // Would need special handling
+                        effectMatchName: "ADBE CurvesCustom",
+                        settings: {}
                     },
                     {
                         effectMatchName: "ADBE Vibrance",
                         settings: {
                             "Vibrance": 15,
                             "Saturation": -5
-                        }
-                    },
-                    {
-                        effectMatchName: "ADBE Vignette",
-                        settings: {
-                            "Amount": 15,
-                            "Roundness": 50,
-                            "Feather": 40
                         }
                     }
                 ]
@@ -797,6 +790,83 @@ function applyEffectTemplate(args) {
 
 // --- End of Function Definitions ---
 
+// --- Bridge test function to verify communication and effects application ---
+function bridgeTestEffects(args) {
+    try {
+        var compIndex = (args && args.compIndex) ? args.compIndex : 1;
+        var layerIndex = (args && args.layerIndex) ? args.layerIndex : 1;
+
+        // Apply a light Gaussian Blur
+        var blurRes = JSON.parse(applyEffect({
+            compIndex: compIndex,
+            layerIndex: layerIndex,
+            effectMatchName: "ADBE Gaussian Blur 2",
+            effectSettings: { "Blurriness": 5 }
+        }));
+
+        // Apply a simple drop shadow via template
+        var shadowRes = JSON.parse(applyEffectTemplate({
+            compIndex: compIndex,
+            layerIndex: layerIndex,
+            templateName: "drop-shadow"
+        }));
+
+        return JSON.stringify({
+            status: "success",
+            message: "Bridge test effects applied.",
+            results: [blurRes, shadowRes]
+        }, null, 2);
+    } catch (e) {
+        return JSON.stringify({ status: "error", message: e.toString() }, null, 2);
+    }
+}
+
+// JSON polyfill for ExtendScript (when JSON is undefined)
+if (typeof JSON === "undefined") {
+    JSON = {};
+}
+if (typeof JSON.parse !== "function") {
+    JSON.parse = function (text) {
+        // Safe-ish fallback for trusted input (our own command file)
+        return eval("(" + text + ")");
+    };
+}
+if (typeof JSON.stringify !== "function") {
+    (function () {
+        function esc(str) {
+            return (str + "")
+                .replace(/\\/g, "\\\\")
+                .replace(/"/g, '\\"')
+                .replace(/\n/g, "\\n")
+                .replace(/\r/g, "\\r")
+                .replace(/\t/g, "\\t");
+        }
+        function toJSON(val) {
+            if (val === null) return "null";
+            var t = typeof val;
+            if (t === "number" || t === "boolean") return String(val);
+            if (t === "string") return '"' + esc(val) + '"';
+            if (val instanceof Array) {
+                var a = [];
+                for (var i = 0; i < val.length; i++) a.push(toJSON(val[i]));
+                return "[" + a.join(",") + "]";
+            }
+            if (t === "object") {
+                var props = [];
+                for (var k in val) {
+                    if (val.hasOwnProperty(k) && typeof val[k] !== "function" && typeof val[k] !== "undefined") {
+                        props.push('"' + esc(k) + '":' + toJSON(val[k]));
+                    }
+                }
+                return "{" + props.join(",") + "}";
+            }
+            return "null";
+        }
+        JSON.stringify = function (value, _replacer, _space) {
+            return toJSON(value);
+        };
+    })();
+}
 
 // Create panel interface
 var panel = (this instanceof Panel) ? this : new Window("palette", "MCP Bridge Auto", undefined);
@@ -844,9 +914,7 @@ function getProjectInfo() {
         path: project.file ? project.file.fsName : "",
         numItems: project.numItems,
         bitsPerChannel: project.bitsPerChannel,
-        frameRate: project.frameRate,
-        dimensions: [project.width, project.height],
-        duration: project.duration,
+        timeMode: project.timeDisplayType === TimeDisplayType.FRAMES ? "Frames" : "Timecode",
         items: []
     };
 
@@ -887,7 +955,21 @@ function getProjectInfo() {
     }
     
     result.itemCounts = countByType;
-    
+
+    // Include active composition metadata if available
+    if (app.project.activeItem instanceof CompItem) {
+        var ac = app.project.activeItem;
+        result.activeComp = {
+            id: ac.id,
+            name: ac.name,
+            width: ac.width,
+            height: ac.height,
+            duration: ac.duration,
+            frameRate: ac.frameRate,
+            numLayers: ac.numLayers
+        };
+    }
+
     return JSON.stringify(result, null, 2);
 }
 
@@ -1015,6 +1097,11 @@ function executeCommand(command, args) {
                 logToPanel("Calling applyEffectTemplate function...");
                 result = applyEffectTemplate(args);
                 logToPanel("Returned from applyEffectTemplate.");
+                break;
+            case "bridgeTestEffects":
+                logToPanel("Calling bridgeTestEffects function...");
+                result = bridgeTestEffects(args);
+                logToPanel("Returned from bridgeTestEffects.");
                 break;
             default:
                 result = JSON.stringify({ error: "Unknown command: " + command });
@@ -1147,19 +1234,17 @@ function checkForCommands() {
             commandFile.close();
             
             if (content) {
-                try {
-                    var commandData = JSON.parse(content);
+                var commandData = (typeof JSON !== "undefined" && JSON.parse)
+                    ? JSON.parse(content)
+                    : eval("(" + content + ")");
+                
+                // Only execute pending commands
+                if (commandData.status === "pending") {
+                    // Update status to running
+                    updateCommandStatus("running");
                     
-                    // Only execute pending commands
-                    if (commandData.status === "pending") {
-                        // Update status to running
-                        updateCommandStatus("running");
-                        
-                        // Execute the command
-                        executeCommand(commandData.command, commandData.args || {});
-                    }
-                } catch (parseError) {
-                    logToPanel("Error parsing command file: " + parseError.toString());
+                    // Execute the command
+                    executeCommand(commandData.command, commandData.args || {});
                 }
             }
         }

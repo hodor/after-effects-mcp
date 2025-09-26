@@ -35,7 +35,7 @@ function applyEffectTemplate(args) {
                 }
             },
             "directional-blur": {
-                effectMatchName: "ADBE Motion Blur",
+                effectMatchName: "ADBE Directional Blur",
                 settings: {
                     "Direction": customSettings.direction || 0,
                     "Blur Length": customSettings.length || 10
@@ -88,22 +88,14 @@ function applyEffectTemplate(args) {
             "cinematic-look": {
                 effects: [
                     {
-                        effectMatchName: "ADBE Curves",
-                        settings: {} // Would need special handling
+                        effectMatchName: "ADBE CurvesCustom",
+                        settings: {}
                     },
                     {
                         effectMatchName: "ADBE Vibrance",
                         settings: {
                             "Vibrance": 15,
                             "Saturation": -5
-                        }
-                    },
-                    {
-                        effectMatchName: "ADBE Vignette",
-                        settings: {
-                            "Amount": 15,
-                            "Roundness": 50,
-                            "Feather": 40
                         }
                     }
                 ]
@@ -207,12 +199,16 @@ function applyEffectTemplate(args) {
     }
 }
 
-// Get arguments passed from Node.js process
-var args;
-try {
-    args = JSON.parse($.getenv("args"));
-} catch (e) {
-    args = {};
+// Read arguments from the temp args file written by the launcher
+var argsFile = new File($.fileName.replace(/[^\\\/]*$/, '') + "../temp/args.json");
+var args = {};
+if (argsFile.exists) {
+    argsFile.open("r");
+    var _content = argsFile.read();
+    argsFile.close();
+    if (_content) {
+        try { args = JSON.parse(_content); } catch (_e) { args = {}; }
+    }
 }
 
 // Run the function and write the result

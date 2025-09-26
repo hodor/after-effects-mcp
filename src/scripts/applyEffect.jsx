@@ -134,12 +134,16 @@ function applyEffectSettings(effect, settings) {
     }
 }
 
-// Get arguments passed from Node.js process
-var args;
-try {
-    args = JSON.parse($.getenv("args"));
-} catch (e) {
-    args = {};
+// Read arguments from the temp args file written by the launcher
+var argsFile = new File($.fileName.replace(/[^\\\/]*$/, '') + "../temp/args.json");
+var args = {};
+if (argsFile.exists) {
+    argsFile.open("r");
+    var _content = argsFile.read();
+    argsFile.close();
+    if (_content) {
+        try { args = JSON.parse(_content); } catch (_e) { args = {}; }
+    }
 }
 
 // Run the function and write the result

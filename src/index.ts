@@ -20,64 +20,7 @@ const __dirname = path.dirname(__filename);
 const SCRIPTS_DIR = path.join(__dirname, "scripts");
 const TEMP_DIR = path.join(__dirname, "temp");
 
-// Helper function to run After Effects scripts
-function runExtendScript(scriptPath: string, args: Record<string, any> = {}): string {
-  try {
-    // Ensure temp directory exists
-    if (!fs.existsSync(TEMP_DIR)) {
-      fs.mkdirSync(TEMP_DIR, { recursive: true });
-    }
-
-    // Create a temporary file to hold the script arguments
-    const argsPath = path.join(TEMP_DIR, "args.json");
-    fs.writeFileSync(argsPath, JSON.stringify(args));
-
-    // Find After Effects executable location - modify as needed for your installation
-    // This is a common default location, adjust as necessary
-    const aePath = "C:\\Program Files\\Adobe\\Adobe After Effects 2024\\Support Files\\AfterFX.exe";
-    
-    // Verify After Effects executable exists
-    if (!fs.existsSync(aePath)) {
-      return `Error: After Effects executable not found at "${aePath}". Please check your installation.`;
-    }
-
-    // Verify script file exists
-    if (!fs.existsSync(scriptPath)) {
-      return `Error: Script file not found at "${scriptPath}".`;
-    }
-
-    // Try using the -m flag instead of -r for running scripts (alternative method)
-    // The -m flag tells After Effects to run a script without showing a dialog
-    const command = `"${aePath}" -m "${scriptPath}" "${argsPath}"`;
-    console.error(`Running command with -m flag: ${command}`);
-    
-    try {
-      const output = execSync(command, { encoding: 'utf8', timeout: 30000 });
-      return output;
-    } catch (execError: any) {
-      console.error("Command execution error:", execError);
-      
-      // If -m flag fails, try creating a JSX file that calls the script via BridgeTalk
-      // This is a different approach that can work if direct execution fails
-      console.error("Trying alternative approach using BridgeTalk...");
-      
-      const bridgeScriptPath = path.join(TEMP_DIR, "bridge_script.jsx");
-      const bridgeScriptContent = `
-#include "${scriptPath.replace(/\\/g, "/")}"
-alert("Script execution completed");
-      `;
-      
-      fs.writeFileSync(bridgeScriptPath, bridgeScriptContent);
-      
-      return `Error executing After Effects command: ${String(execError?.message || execError)}. 
-      This might be because After Effects cannot be accessed in headless mode.
-      Please try running the script "${path.basename(scriptPath)}" manually in After Effects.`;
-    }
-  } catch (error) {
-    console.error("Error running ExtendScript:", error);
-    return `Error: ${String(error)}`;
-  }
-}
+// Headless CLI execution has been removed. All interactions are routed through the Bridge panel.
 
 // Helper function to read results from After Effects temp file
 function readResultsFromTempFile(): string {
@@ -116,6 +59,36 @@ function readResultsFromTempFile(): string {
     console.error("Error reading results file:", error);
     return JSON.stringify({ error: `Failed to read results: ${String(error)}` });
   }
+}
+
+// Helper to wait for a fresh result produced by a specific command
+async function waitForBridgeResult(expectedCommand?: string, timeoutMs: number = 5000, pollMs: number = 250): Promise<string> {
+  const start = Date.now();
+  const resultPath = path.join(process.env.TEMP || process.env.TMP || '', 'ae_mcp_result.json');
+  let lastSize = -1;
+
+  while (Date.now() - start < timeoutMs) {
+    if (fs.existsSync(resultPath)) {
+      try {
+        const content = fs.readFileSync(resultPath, 'utf8');
+        if (content && content.length > 0 && content.length !== lastSize) {
+          lastSize = content.length;
+          try {
+            const parsed = JSON.parse(content);
+            if (!expectedCommand || parsed._commandExecuted === expectedCommand) {
+              return content;
+            }
+          } catch {
+            // not JSON yet; continue polling
+          }
+        }
+      } catch {
+        // transient read error; continue polling
+      }
+    }
+    await new Promise(r => setTimeout(r, pollMs));
+  }
+  return JSON.stringify({ error: `Timed out waiting for bridge result${expectedCommand ? ` for command '${expectedCommand}'` : ''}.` });
 }
 
 // Helper function to write command to file
@@ -159,9 +132,10 @@ server.resource(
   "compositions",
   "aftereffects://compositions",
   async (uri) => {
-    const scriptPath = path.join(SCRIPTS_DIR, "listCompositions.jsx");
-    console.error(`Using script path: ${scriptPath}`);
-    const result = runExtendScript(scriptPath);
+    // Clear old results, queue the command, and wait for bridge output
+    clearResultsFile();
+    writeCommandFile("listCompositions", {});
+    const result = await waitForBridgeResult("listCompositions", 6000, 250);
 
     return {
       contents: [{
@@ -339,8 +313,8 @@ server.tool(
 
 To use this integration with After Effects, follow these steps:
 
-1. **Install the scripts in After Effects**
-   - Run \`node install-script.js\` with administrator privileges
+ 1. **Install the scripts in After Effects**
+   - Run \`node install-bridge.js\` with administrator privileges
    - This copies the necessary scripts to your After Effects installation
 
 2. **Open After Effects**
@@ -849,7 +823,7 @@ These are internal names used by After Effects that can be used with the \`effec
 ### Blur & Sharpen
 - Gaussian Blur: "ADBE Gaussian Blur 2"
 - Camera Lens Blur: "ADBE Camera Lens Blur"
-- Directional Blur: "ADBE Motion Blur"
+- Directional Blur: "ADBE Directional Blur"
 - Radial Blur: "ADBE Radial Blur"
 - Smart Blur: "ADBE Smart Blur"
 - Unsharp Mask: "ADBE Unsharp Mask"

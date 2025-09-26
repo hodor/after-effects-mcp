@@ -8,9 +8,6 @@ function getProjectInfo() {
         path: project.file ? project.file.fsName : "",
         numItems: project.numItems,
         bitsPerChannel: project.bitsPerChannel,
-        frameRate: project.frameRate,
-        dimensions: project.displaySize,
-        duration: project.duration,
         timeMode: project.timeDisplayType === TimeDisplayType.FRAMES ? "Frames" : "Timecode",
         items: []
     };
@@ -52,6 +49,20 @@ function getProjectInfo() {
     }
     
     result.itemCounts = countByType;
+
+    // Include active composition metadata if available
+    if (app.project.activeItem instanceof CompItem) {
+        var ac = app.project.activeItem;
+        result.activeComp = {
+            id: ac.id,
+            name: ac.name,
+            width: ac.width,
+            height: ac.height,
+            duration: ac.duration,
+            frameRate: ac.frameRate,
+            numLayers: ac.numLayers
+        };
+    }
     
     return JSON.stringify(result, null, 2);
 }
