@@ -790,6 +790,7 @@ function applyEffectTemplate(args) {
 
 // --- End of Function Definitions ---
 
+<<<<<<< HEAD
 // --- Bridge test function to verify communication and effects application ---
 function bridgeTestEffects(args) {
     try {
@@ -867,9 +868,14 @@ if (typeof JSON.stringify !== "function") {
         };
     })();
 }
+=======
+// AE 2025+ compatibility: Always use floating palette, warn if dockable panels are not supported
+var aeVersion = parseFloat(app.version);
+var isAE2025OrLater = aeVersion >= 24.0; // AE 2025 is version 24.x
+>>>>>>> 0c5db8844f0e6dc90384d369c9ee395db85e9966
 
-// Create panel interface
-var panel = (this instanceof Panel) ? this : new Window("palette", "MCP Bridge Auto", undefined);
+// Always create a floating palette window for AE 2025+
+var panel = new Window("palette", "MCP Bridge Auto", undefined);
 panel.orientation = "column";
 panel.alignChildren = ["fill", "top"];
 panel.spacing = 10;
@@ -885,6 +891,12 @@ logPanel.orientation = "column";
 logPanel.alignChildren = ["fill", "fill"];
 var logText = logPanel.add("edittext", undefined, "", {multiline: true, readonly: true});
 logText.preferredSize.height = 200;
+
+// AE 2025 warning
+if (isAE2025OrLater) {
+    var warning = panel.add("statictext", undefined, "AE 2025+: Dockable panels are not supported. Floating window only.");
+    warning.graphics.foregroundColor = warning.graphics.newPen(warning.graphics.PenType.SOLID_COLOR, [1,0.3,0,1], 1);
+}
 
 // Auto-run checkbox
 var autoRunCheckbox = panel.add("checkbox", undefined, "Auto-run commands");
@@ -1275,7 +1287,5 @@ statusText.text = "Ready - Auto-run is " + (autoRunCheckbox.value ? "ON" : "OFF"
 startCommandChecker();
 
 // Show the panel
-if (panel instanceof Window) {
-    panel.center();
-    panel.show();
-}
+panel.center();
+panel.show();
