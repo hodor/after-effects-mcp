@@ -20,9 +20,6 @@ const __dirname = path.dirname(__filename);
 const SCRIPTS_DIR = path.join(__dirname, "scripts");
 const TEMP_DIR = path.join(__dirname, "temp");
 
-<<<<<<< HEAD
-// Headless CLI execution has been removed. All interactions are routed through the Bridge panel.
-=======
 // Helper function to run After Effects scripts
 function runExtendScript(scriptPath: string, args: Record<string, any> = {}): string {
   try {
@@ -81,7 +78,6 @@ alert("Script execution completed");
     return `Error: ${String(error)}`;
   }
 }
->>>>>>> 0c5db8844f0e6dc90384d369c9ee395db85e9966
 
 // Helper function to read results from After Effects temp file
 function readResultsFromTempFile(): string {
